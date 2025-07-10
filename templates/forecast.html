@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Weather Forecast for [[${city}]]</title>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700&display=swap" rel="stylesheet">
+    <!-- Leaflet CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+          integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
+          crossorigin=""/>
+    <style>
+        body {
+            min-height: 100vh;
+            margin: 0;
+            font-family: 'Poppins', Arial, sans-serif;
+            background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+            color: #f9fafb;
+            overflow-x: hidden;
+        }
+        header {
+            text-align: center;
+            padding: 2rem 0 1rem 0;
+        }
+        h1 {
+            font-size: 2.2rem;
+            font-weight: 700;
+            margin-bottom: 0.5rem;
+            text-shadow: 0 2px 16px rgba(0,0,0,0.18);
+            letter-spacing: 1px;
+        }
+        .subtitle {
+            font-size: 1.1rem;
+            color: #a5b4fc;
+            margin-bottom: 0.5rem;
+        }
+        .coords {
+            font-size: 0.98rem;
+            color: #dbeafe;
+        }
+        .map-container {
+            max-width: 900px;
+            margin: 0 auto 2rem auto;
+            border-radius: 1rem;
+            overflow: hidden;
+            box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.18);
+        }
+        #map {
+            width: 100%;
+            height: 400px;
+            background: rgba(255,255,255,0.1);
+            border-radius: 1rem;
+        }
+        .forecast-container {
+            max-width: 900px;
+            margin: 0 auto;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 2rem;
+            justify-content: center;
+        }
+        .forecast-card {
+            background: rgba(255,255,255,0.12);
+            border: 1.5px solid rgba(255,255,255,0.18);
+            border-radius: 1.5rem;
+            box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.18);
+            padding: 1.5rem 1.2rem 1.2rem 1.2rem;
+            min-width: 260px;
+            max-width: 290px;
+            transition: transform 0.25s cubic-bezier(.4,2.3,.3,1), box-shadow 0.25s;
+            backdrop-filter: blur(16px);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            position: relative;
+            overflow: hidden;
+            animation: floatIn 0.7s cubic-bezier(.4,2.3,.3,1);
+        }
+        .forecast-card:hover {
+            transform: translateY(-8px) scale(1.03) rotate(-1deg);
+            box-shadow: 0 16px 48px 0 rgba(31, 38, 135, 0.22);
+        }
+        @keyframes floatIn {
+            from { opacity: 0; transform: translateY(40px) scale(0.97);}
+            to { opacity: 1; transform: translateY(0) scale(1);}
+        }
+        .forecast-header {
+            display: flex;
+            align-items: center;
+            gap: 1.2rem;
+            margin-bottom: 0.5rem;
+        }
+        .forecast-header img {
+            width: 64px;
+            height: 64px;
+            filter: drop-shadow(0 4px 16px rgba(0,0,0,0.15));
+            background: rgba(255,255,255,0.14);
+            border-radius: 50%;
+            padding: 0.3rem;
+        }
+        .forecast-time {
+            font-size: 1.05rem;
+            font-weight: 6 00;
+            color: #fbbf24;
+            margin-bottom: 0.1rem;
+        }
+        .forecast-desc {
+            font-size: 1rem;
+            color: #e0e7ff;
+            font-weight: 500;
+        }
+        .risk-warning {
+            animation: pulse 2s infinite;
+            box-shadow: 0 0 20px rgba(255, 50, 50, 0.5);
+            margin-bottom: 1rem;
+            padding: 0.7rem 0.8rem;
+            border-radius: 1rem;
+            background: linear-gradient(90deg, #ef4444 0%, #f59e42 100%);
+            color: #fff;
+            font-weight: 600;
+            text-align: center;
+            font-size: 1rem;
+            width: 100%;
+        }
+        @keyframes pulse {
+            0% { transform: scale(1);}
+            50% { transform: scale(1.04);}
+            100% { transform: scale(1);}
+        }
+        .forecast-details {
+            width: 100%;
+            margin-top: 1rem;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 0.7rem 1.2rem;
+        }
+        .detail-row {
+            background: rgba(255,255,255,0.09);
+            border-radius: 0.7rem;
+            padding: 0.65rem 0.5rem;
+            text-align: center;
+            box-shadow: 0 2px 8px 0 rgba(31,38,135,0.07);
+        }
+        .label {
+            font-size: 0.93em;
+            font-weight: 600;
+            color: #a5b4fc;
+            margin-bottom: 0.13rem;
+        }
+        .value {
+            font-size: 1.08em;
+            font-weight: 700;
+            color: #fff;
+        }
+        .back-link {
+            display: block;
+            margin: 2.2rem auto 2.5rem auto;
+            text-align: center;
+            color: #fff;
+            text-decoration: none;
+            font-weight: 600;
+            background: linear-gradient(90deg,#6366f1 0%,#60a5fa 100%);
+            border: none;
+            padding: 0.8rem 2.2rem;
+            border-radius: 2rem;
+            box-shadow: 0 4px 16px 0 rgba(99,102,241,0.13);
+            font-size: 1.08rem;
+            letter-spacing: 1px;
+            transition: background 0.2s, color 0.2s, transform 0.2s;
+        }
+        .back-link:hover {
+            background: linear-gradient(90deg,#60a5fa 0%,#6366f1 100%);
+            color: #fbbf24;
+            transform: translateY(-3px) scale(1.04);
+        }
+        @media (max-width: 900px) {
+            .forecast-container { flex-direction: column; align-items: center; }
+        }
+        @media (max-width: 500px) {
+            .forecast-card { min-width: 90vw; max-width: 96vw; padding: 1.1rem 0.5rem;}
+            .forecast-details { grid-template-columns: 1fr; }
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>
+            <span th:text="${city}"></span>, <span th:text="${country}"></span>
+        </h1>
+        <div class="subtitle">Upcoming Weather Forecast</div>
+        <div class="coords">Coordinates: <span th:text="${lat}"></span>, <span th:text="${lon}"></span></div>
+    </header>
+
+    <!-- Leaflet Map -->
+    <div class="map-container">
+        <div id="map"></div>
+    </div>
+
+    <div class="forecast-container">
+        <div class="forecast-card" th:each="forecast : ${forecasts}">
+            <div th:if="${forecast.riskMessage}" class="risk-warning" th:text="'⚠️ AT RISK: ' + ${forecast.riskMessage}"></div>
+            <div class="forecast-header">
+                <img th:src="@{'https://openweathermap.org/img/wn/' + ${forecast.icon} + '@2x.png'}" alt="Weather icon">
+                <div>
+                    <div class="forecast-time" th:text="${forecast.time}"></div>
+                    <div class="forecast-desc" th:text="${forecast.weather}"></div>
+                </div>
+            </div>
+            <div class="forecast-details">
+                <div class="detail-row">
+                    <div class="label">Temperature</div>
+                    <div class="value" th:text="${forecast.temp} + '°C'"></div>
+                </div>
+                <div class="detail-row">
+                    <div class="label">Feels Like</div>
+                    <div class="value" th:text="${forecast.feels_like} + '°C'"></div>
+                </div>
+                <div class="detail-row">
+                    <div class="label">Humidity</div>
+                    <div class="value" th:text="${forecast.humidity} + '%'"></div>
+                </div>
+                <div class="detail-row">
+                    <div class="label">Pressure</div>
+                    <div class="value" th:text="${forecast.pressure} + ' hPa'"></div>
+                </div>
+                <div class="detail-row">
+                    <div class="label">Wind Speed</div>
+                    <div class="value" th:text="${forecast.wind_speed} + ' m/s'"></div>
+                </div>
+                <div class="detail-row">
+                    <div class="label">Rain (3h)</div>
+                    <div class="value" th:text="${forecast.rain} + ' mm'"></div>
+                </div>
+                <div class="detail-row">
+                    <div class="label">Snow (3h)</div>
+                    <div class="value" th:text="${forecast.snow} + ' mm'"></div>
+                </div>
+                <div class="detail-row">
+                    <div class="label">Cloudiness</div>
+                    <div class="value" th:text="${forecast.clouds} + '%'"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <a class="back-link" href="/weather">← Back to City Selection</a>
+
+    <!-- Leaflet JS -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+            integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
+            crossorigin=""></script>
+    <script th:inline="javascript">
+        // Initialize the map centered at the city's coordinates
+        var lat = [[${lat}]];
+        var lon = [[${lon}]];
+        var city = [[${city}]];
+        var country = [[${country}]];
+
+        var map = L.map('map').setView([lat, lon], 12);
+
+        // Add OpenStreetMap tiles
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+        }).addTo(map);
+
+        // Add a marker at the city's coordinates with a popup
+        L.marker([lat, lon]).addTo(map)
+            .bindPopup('<b>' + city + '</b><br>' + country)
+            .openPopup();
+    </script>
+</body>
+</html>

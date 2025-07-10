@@ -1,0 +1,400 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Weather Symphony</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/animejs/3.2.1/anime.min.js"></script>
+
+  <style>
+    :root {
+      --background-gradient: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+      --card-background: rgba(255, 255, 255, 0.08);
+      --card-border: rgba(255, 255, 255, 0.15);
+      --cloud-color: #89CFF0;
+    }
+
+    body {
+      background: var(--background-gradient);
+      font-family: 'Poppins', sans-serif;
+      color: #fff;
+      margin: 0;
+      height: 100vh;
+      overflow: hidden;
+    }
+
+    .hero-container { 
+      position: relative; 
+      z-index: 2; 
+    }
+
+    .crystal-card {
+      background: var(--card-background);
+      backdrop-filter: blur(20px);
+      border-radius: 2rem;
+      border: 1px solid var(--card-border);
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+      transform-style: preserve-3d;
+      overflow: hidden;
+    }
+
+    .crystal-card::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(45deg, rgba(255,255,255,0.15) 0%, rgba(255,255,255,0) 50%, rgba(255,255,255,0.15) 100%);
+      z-index: -1;
+    }
+
+    .weather-icon {
+      font-size: 4rem;
+      filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.3));
+      animation: float 3s ease-in-out infinite;
+    }
+
+    @keyframes float {
+      0%, 100% { transform: translateY(0); }
+      50% { transform: translateY(-1rem); }
+    }
+
+    .dynamic-text {
+      background: linear-gradient(45deg, var(--cloud-color), #FFFFFF);
+      -webkit-background-clip: text;
+      background-clip: text;
+      color: transparent;
+    }
+
+    .risk-warning {
+      animation: pulse 2s infinite;
+      box-shadow: 0 0 20px rgba(255, 50, 50, 0.5);
+    }
+
+    @keyframes pulse {
+      0% { transform: scale(1); }
+      50% { transform: scale(1.02); }
+      100% { transform: scale(1); }
+    }
+
+    /* Weather Effects */
+    .rain-drop {
+      position: absolute;
+      width: 2px;
+      height: 50px;
+      background: linear-gradient(transparent, var(--cloud-color));
+      animation: rain 1s linear infinite;
+    }
+
+    @keyframes rain {
+      0% { transform: translateY(-100vh); }
+      100% { transform: translateY(100vh); }
+    }
+
+    .snow-flake {
+      position: absolute;
+      width: 8px;
+      height: 8px;
+      background: white;
+      border-radius: 50%;
+      filter: blur(1px);
+      animation: snow 10s linear infinite;
+    }
+
+    @keyframes snow {
+      0% { transform: translateY(-100vh) rotate(0deg); }
+      100% { transform: translateY(100vh) rotate(360deg); }
+    }
+
+    .star {
+      position: absolute;
+      width: 2px;
+      height: 2px;
+      background: white;
+      border-radius: 50%;
+      animation: twinkle 3s infinite;
+    }
+
+    @keyframes twinkle {
+      0%, 100% { opacity: 0.3; }
+      50% { opacity: 1; }
+    }
+  </style>
+</head>
+<body class="flex justify-center items-center">
+  <!-- Background Effects -->
+  <div id="threejs-container" class="absolute inset-0 z-0"></div>
+  <div id="weather-effects" class="absolute inset-0 z-1"></div>
+
+  <!-- Weather Card -->
+  <div class="hero-container flex justify-center items-center min-h-screen">
+    <article class="crystal-card w-96 p-8 relative rounded-2xl backdrop-blur-lg shadow-lg border border-white/15">
+      <div class="weather-icon text-center text-5xl mb-4" id="main-icon" role="img" aria-label="Weather Icon">⛅</div>
+	  <!-- Add this inside the <article> tag, right below the weather icon (around line 94) -->
+	  <div class="clock-container text-center mb-4">
+	    <div class="text-4xl font-bold tracking-wider" id="digital-clock">
+	      --:--:--
+	    </div>
+	    <div class="text-sm text-white/70" id="date-display">
+	      -- --- ----
+	    </div>
+	  </div>
+      <!-- Risk Banner -->
+      <div th:if="${riskMessage}" class="risk-warning animate-pulse mb-6 p-4 rounded-xl bg-gradient-to-r from-red-500 to-orange-500 text-white text-center text-sm font-semibold" role="alert" aria-live="assertive">
+        ⚠️ CITY AT RISK: <span th:text="${riskMessage}"></span>
+      </div>
+
+      <h1 class="text-3xl font-bold text-center mb-1" role="heading" aria-level="1">
+        <span th:text="${city}"></span>
+      </h1>
+      <p class="text-center text-white/70 mb-6" role="contentinfo">
+        <span th:text="${country}"></span> • 
+        <span th:text="${weather}"></span>
+      </p>
+
+	  <!-- Stats Grid -->
+	  <section class="flex justify-start gap-4 mb-6 overflow-x-auto px-2">
+	    <!-- Temperature -->
+	    <div class="min-w-[200px] p-4 bg-white/10 rounded-xl backdrop-blur-lg hover:scale-105 transition duration-300 shadow-md text-center">
+	      <p class="text-sm text-white/60">🌡️ Temperature</p>
+	      <p class="text-2xl font-bold dynamic-text" th:text="${temp} + '°C'">--°C</p>
+	    </div>
+
+	    <!-- Coordinates -->
+	    <div class="min-w-[200px] p-4 bg-white/10 rounded-xl backdrop-blur-lg hover:scale-105 transition duration-300 shadow-md text-center">
+	      <p class="text-sm text-white/60">🧭 Coordinates</p>
+	      <p class="text-lg font-bold dynamic-text">Lat: <span th:text="${lat}"></span>, Lon: <span th:text="${lon}"></span></p>
+	    </div>
+
+	    <!-- Feels Like -->
+	    <div class="min-w-[200px] p-4 bg-white/10 rounded-xl backdrop-blur-lg hover:scale-105 transition duration-300 shadow-md text-center">
+	      <p class="text-sm text-white/60">🥵 Feels Like</p>
+	      <p class="text-2xl font-bold dynamic-text" th:text="${feels_like} + '°C'">--°C</p>
+	    </div>
+
+	    <!-- Wind -->
+	    <div class="min-w-[200px] p-4 bg-white/10 rounded-xl backdrop-blur-lg hover:scale-105 transition duration-300 shadow-md text-center">
+	      <p class="text-sm text-white/60">💨 Wind</p>
+	      <p class="text-2xl font-bold dynamic-text" th:text="${wind_speed} + ' m/s'">-- m/s</p>
+	    </div>
+
+	    <!-- Humidity -->
+	    <div class="min-w-[200px] p-4 bg-white/10 rounded-xl backdrop-blur-lg hover:scale-105 transition duration-300 shadow-md text-center">
+	      <p class="text-sm text-white/60">💧 Humidity</p>
+	      <p class="text-2xl font-bold dynamic-text" th:text="${humidity} + '%'">--%</p>
+	    </div>
+
+	    <!-- Air Pressure -->
+	    <div class="min-w-[200px] p-4 bg-white/10 rounded-xl backdrop-blur-lg hover:scale-105 transition duration-300 shadow-md text-center">
+	      <p class="text-sm text-white/60">🎈 Air Pressure</p>
+	      <p class="text-2xl font-bold dynamic-text" th:text="${pressure} + ' hPa'">-- hPa</p>
+	    </div>
+
+	    <!-- Visibility -->
+	    <div class="min-w-[200px] p-4 bg-white/10 rounded-xl backdrop-blur-lg hover:scale-105 transition duration-300 shadow-md text-center">
+	      <p class="text-sm text-white/60">🔭 Visibility</p>
+	      <p class="text-2xl font-bold dynamic-text" th:text="${visibility} + ' km'">-- km</p>
+	    </div>
+
+	    <!-- UV Index -->
+	    <div class="min-w-[200px] p-4 bg-white/10 rounded-xl backdrop-blur-lg hover:scale-105 transition duration-300 shadow-md text-center">
+	      <p class="text-sm text-white/60">☀️ UV Index</p>
+	      <p class="text-2xl font-bold dynamic-text" th:text="${uv_index}">--</p>
+	    </div>
+
+	    <!-- Rain -->
+	    <div class="min-w-[200px] p-4 bg-white/10 rounded-xl backdrop-blur-lg hover:scale-105 transition duration-300 shadow-md text-center">
+	      <p class="text-sm text-white/60">🌧️ Rain</p>
+	      <p class="text-2xl font-bold dynamic-text" th:text="${rain} + ' mm'">-- mm</p>
+	    </div>
+
+	    <!-- Snow -->
+	    <div class="min-w-[200px] p-4 bg-white/10 rounded-xl backdrop-blur-lg hover:scale-105 transition duration-300 shadow-md text-center">
+	      <p class="text-sm text-white/60">❄️ Snow</p>
+	      <p class="text-2xl font-bold dynamic-text" th:text="${snow} + ' mm'">-- mm</p>
+	    </div>
+
+	    <!-- Cloudiness -->
+	    <div class="min-w-[200px] p-4 bg-white/10 rounded-xl backdrop-blur-lg hover:scale-105 transition duration-300 shadow-md text-center">
+	      <p class="text-sm text-white/60">☁️ Cloudiness</p>
+	      <p class="text-2xl font-bold dynamic-text" th:text="${clouds} + '%'">--%</p>
+	    </div>
+<!--Air Quality check-->
+<!-- AQI -->
+        <div class="min-w-[200px] p-4 bg-white/10 rounded-xl backdrop-blur-lg hover:scale-105 transition duration-300 shadow-md text-center">
+          <p class="text-sm text-white/60">🫁 Air Quality Index</p>
+          <p class="text-2xl font-bold dynamic-text" th:text="${aqi} == -1 ? 'N/A' : ${aqi}">--</p>
+        </div>
+        <!-- PM2.5 -->
+        <div class="min-w-[200px] p-4 bg-white/10 rounded-xl backdrop-blur-lg hover:scale-105 transition duration-300 shadow-md text-center">
+          <p class="text-sm text-white/60">PM2.5</p>
+          <p class="text-2xl font-bold dynamic-text" th:text="${pm25} == -1 ? 'N/A' : ${pm25} + ' μg/m³'">--</p>
+        </div>
+		<!-- PM10 -->
+		        <div class="min-w-[200px] p-4 bg-white/10 rounded-xl backdrop-blur-lg hover:scale-105 transition duration-300 shadow-md text-center">
+		          <p class="text-sm text-white/60">PM10</p>
+		          <p class="text-2xl font-bold dynamic-text" th:text="${pm10} == -1 ? 'N/A' : ${pm10} + ' μg/m³'">--</p>
+		        </div>
+				<!-- Ozone -->
+				      <div class="min-w-[200px] p-4 bg-white/10 rounded-xl backdrop-blur-lg hover:scale-105 transition duration-300 shadow-md text-center">
+				        <p class="text-sm text-white/60">Ozone (O₃)</p>
+				        <p class="text-2xl font-bold dynamic-text" th:text="${o3} == -1 ? 'N/A' : ${o3} + ' μg/m³'">--</p>
+				      </div>
+				      <!-- NO2 -->
+				      <div class="min-w-[200px] p-4 bg-white/10 rounded-xl backdrop-blur-lg hover:scale-105 transition duration-300 shadow-md text-center">
+				        <p class="text-sm text-white/60">NO₂</p>
+				        <p class="text-2xl font-bold dynamic-text" th:text="${no2} == -1 ? 'N/A' : ${no2} + ' μg/m³'">--</p>
+				      </div>
+					  <!-- SO2 -->
+					         <div class="min-w-[200px] p-4 bg-white/10 rounded-xl backdrop-blur-lg hover:scale-105 transition duration-300 shadow-md text-center">
+					           <p class="text-sm text-white/60">SO₂</p>
+					           <p class="text-2xl font-bold dynamic-text" th:text="${so2} == -1 ? 'N/A' : ${so2} + ' μg/m³'">--</p>
+					         </div>
+					         <!-- CO -->
+					         <div class="min-w-[200px] p-4 bg-white/10 rounded-xl backdrop-blur-lg hover:scale-105 transition duration-300 shadow-md text-center">
+					           <p class="text-sm text-white/60">CO</p>
+					           <p class="text-2xl font-bold dynamic-text" th:text="${co} == -1 ? 'N/A' : ${co} + ' μg/m³'">--</p>
+					         </div>
+					       </section>
+
+      <!-- Back Button -->
+      <div class="mb-6">
+        <a href="/weather" class="text-blue-400 hover:text-blue-300 flex items-center" aria-label="Go back to select another city">
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"/>
+          </svg>
+          Select Another City
+        </a>
+      </div>
+
+      <!-- Sunrise & Sunset -->
+      <div class="flex justify-between text-sm text-white mt-4">
+        <div class="text-center">
+          <div class="text-xl" aria-hidden="true">🌅</div>
+          <p class="font-semibold text-lg" th:text="${sunrise}"></p>
+        </div>
+        <div class="text-center">
+          <div class="text-xl" aria-hidden="true">🌆</div>
+          <p class="font-semibold text-lg" th:text="${sunset}"></p>
+        </div>
+      </div>
+    </article>
+  </div>
+
+  <!-- JS -->
+  <script>
+	
+	// Digital Clock Function
+	function updateClock() {
+	  const now = new Date();
+	  
+	  // Digital Time
+	  const hours = now.getHours().toString().padStart(2, '0');
+	  const minutes = now.getMinutes().toString().padStart(2, '0');
+	  const seconds = now.getSeconds().toString().padStart(2, '0');
+	  document.getElementById('digital-clock').textContent = `${hours}:${minutes}:${seconds}`;
+	  
+	  // Date Display
+	  const options = { weekday: 'long', year: 'numeric', month: 'short', day: 'numeric' };
+	  document.getElementById('date-display').textContent = now.toLocaleDateString('en-US', options);
+	}
+
+	// Update clock immediately and then every second
+	updateClock();
+	setInterval(updateClock, 1000);
+
+	// Add animation for the clock
+	anime({
+	  targets: '#digital-clock',
+	  opacity: [0, 1],
+	  translateY: [-10, 0],
+	  duration: 800,
+	  easing: 'easeOutExpo',
+	  delay: 300
+	});
+	
+    // Three.js Star Background
+    const scene = new THREE.Scene();
+    const camera = new THREE.PerspectiveCamera(75, window.innerWidth/ window.innerHeight, 0.1, 1000);
+    const renderer = new THREE.WebGLRenderer({ alpha: true });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    document.getElementById('threejs-container').appendChild(renderer.domElement);
+
+    const particles = new THREE.BufferGeometry();
+    const particleCount = 1000;
+    const posArray = new Float32Array(particleCount * 3);
+    for(let i = 0; i < particleCount * 3; i++) {
+      posArray[i] = (Math.random() - 0.5) * 10;
+    }
+    particles.setAttribute('position', new THREE.BufferAttribute(posArray, 3));
+    const material = new THREE.PointsMaterial({ size: 0.005, color: '#89CFF0' });
+    const particleMesh = new THREE.Points(particles, material);
+    scene.add(particleMesh);
+    camera.position.z = 2;
+
+    function animate() {
+      requestAnimationFrame(animate);
+      particleMesh.rotation.x += 0.001;
+      particleMesh.rotation.y += 0.001;
+      renderer.render(scene, camera);
+    }
+    animate();
+
+    // Weather Effects
+    function createWeatherEffect() {
+      const container = document.getElementById('weather-effects');
+      const condition = document.querySelector('[th\\:text="${weather}"]')?.textContent?.toLowerCase() || "clear";
+      container.innerHTML = '';
+
+      const numberOfParticles = condition.includes('rain') ? 100 : condition.includes('snow') ? 50 : 100; // Fallback to stars
+      for (let i = 0; i < numberOfParticles; i++) {
+        const particle = document.createElement('div');
+        if (condition.includes('rain')) {
+          particle.className = 'rain-drop';
+          particle.style.left = Math.random() * 100 + '%';
+          particle.style.animationDuration = Math.random() * 0.5 + 0.5 + 's';
+
+        } else if (condition.includes('snow')) {
+          particle.className = 'snow-flake';
+          particle.style.left = Math.random() * 100 + '%';
+          particle.style.animationDuration = Math.random() * 3 + 5 + 's';
+
+        } else {
+          particle.className = 'star';
+          particle.style.left = Math.random() * 100 + '%';
+          particle.style.top = Math.random() * 100 + '%';
+        }
+        container.appendChild(particle);
+      }
+    }
+    createWeatherEffect();
+
+    // Animations
+    anime({
+      targets: '.crystal-card',
+      scale: [0.9, 1],
+      opacity: [0, 1],
+      duration: 1000,
+      easing: 'easeOutExpo'
+    });
+
+    anime({
+      targets: '.weather-icon',
+      rotate: [90, 0],
+      scale: [0, 1],
+      duration: 1000,
+      easing: 'easeOutBack'
+    });
+
+    anime({
+      targets: '.dynamic-text',
+      opacity: [0, 1],
+      translateY: [20, 0],
+      delay: anime.stagger(100),
+      duration: 800,
+      easing: 'easeOutExpo'
+    });
+  </script>
+</body>
+</html>

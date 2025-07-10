@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <title>Climate Dashboard for [[${country}]]</title>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Google Fonts for modern typography -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
+    <!-- Leaflet CSS & JS for the map -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- ScrollReveal for subtle animations -->
+    <script src="https://unpkg.com/scrollreveal"></script>
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        .badge {
+            padding: 0.25rem 0.5rem;
+            border-radius: 0.375rem;
+            font-size: 0.75rem;
+            font-weight: 600;
+            display: inline-block;
+        }
+        .badge-flood { background: #dbeafe; color: #1e40af; }
+        .badge-drought { background: #fef9c3; color: #a16207; }
+        .badge-storm { background: #ede9fe; color: #6d28d9; }
+        .badge-landslide { background: #dcfce7; color: #166534; }
+        .badge-wildfire { background: #fee2e2; color: #b91c1c; }
+        .badge-extreme { background: #fce7f3; color: #be185d; }
+        .badge-total { background: #e5e7eb; color: #111827; }
+    </style>
+</head>
+<body class="bg-gradient-to-br from-blue-50 to-green-100 min-h-screen">
+    <div class="max-w-7xl mx-auto py-10 px-4">
+        <h1 class="text-4xl font-extrabold text-center text-blue-900 mb-8 tracking-tight" style="letter-spacing: -1px;">Climate Dashboard for <span th:text="${country}"></span></h1>
+        
+        <!-- Weather & Top Years Cards -->
+        <div class="flex flex-wrap gap-6 justify-center mb-10">
+            <!-- Live Weather Card -->
+            <div th:if="${weather != null}" class="bg-gradient-to-br from-yellow-100 to-yellow-200 rounded-2xl shadow-lg p-6 flex items-center gap-6 min-w-[320px] w-full md:w-auto" style="min-width:320px;">
+                <div>
+                    <h2 class="text-lg font-bold text-yellow-800 mb-1">Live Weather in <span th:text="${weather.getString('name')}"></span></h2>
+                    <div class="text-2xl font-bold">
+                        <span th:text="${weather.getJSONObject('main').getDouble('temp')}"></span>°C
+                        <span class="text-base font-normal text-gray-600 ml-2" th:text="${weather.getJSONArray('weather').getJSONObject(0).getString('description')}"></span>
+                    </div>
+                    <div class="mt-1 text-sm text-gray-700">
+                        Humidity: <span th:text="${weather.getJSONObject('main').getInt('humidity')}"></span>%
+                        &nbsp;|&nbsp;
+                        Wind: <span th:text="${weather.getJSONObject('wind').getDouble('speed')}"></span> m/s
+                    </div>
+                </div>
+                <div>
+                    <img th:src="'https://openweathermap.org/img/wn/' + ${weather.getJSONArray('weather').getJSONObject(0).getString('icon')} + '@2x.png'" alt="Weather icon" class="w-16 h-16" />
+                </div>
+            </div>
+            <!-- Top Years Card -->
+            <div id="topYearsCard" class="bg-gradient-to-br from-green-100 to-green-200 rounded-2xl shadow-lg p-6 min-w-[320px] w-full md:w-auto"></div>
+        </div>
+
+        <!-- Filters -->
+        <form method="get" th:action="@{/climate/view/{country}(country=${country})}" class="flex flex-wrap gap-4 mb-8 items-end justify-center">
+            <div>
+                <label class="block text-sm text-blue-900 font-semibold">Year:</label>
+                <input type="number" name="year" th:value="${param.year}" class="border px-4 py-2 rounded w-36 shadow focus:ring-2 focus:ring-blue-300" placeholder="e.g. 2000"/>
+            </div>
+            <div>
+                <label class="block text-sm text-blue-900 font-semibold">Indicator:</label>
+                <input type="text" name="indicator" th:value="${param.indicator}" class="border px-4 py-2 rounded w-64 shadow focus:ring-2 focus:ring-blue-300" placeholder="e.g. Flood"/>
+            </div>
+            <button type="submit" class="bg-blue-600 text-white px-6 py-2 rounded-lg shadow hover:bg-blue-700 transition font-semibold">Filter</button>
+        </form>
+
+        <!-- Data Table -->
+        <div class="overflow-x-auto rounded-2xl shadow-2xl bg-white mb-10" style="scrollbar-width:thin;">
+            <table class="min-w-full text-base text-gray-800">
+                <thead class="bg-blue-700 text-white sticky top-0">
+                    <tr>
+                        <th class="py-4 px-3 text-left font-bold">Year</th>
+                        <th class="py-4 px-3 text-left font-bold">Indicator</th>
+                        <th class="py-4 px-3 text-left font-bold">Value</th>
+                        <th class="py-4 px-3 text-left font-bold">Unit</th>
+                        <th class="py-4 px-3 text-left font-bold">Source</th>
+                    </tr>
+                </thead>
+                <tbody>
+                <tr th:each="record,iterStat : ${climateData}" th:classappend="${iterStat.index % 2 == 0} ? 'bg-blue-50' : 'bg-white'" class="transition hover:bg-blue-100">
+                    <td class="py-3 px-3 font-mono font-semibold" th:text="${record.year}"></td>
+                    <td class="py-3 px-3">
+                        <span th:text="${record.indicator}" class="font-semibold"></span>
+                        <span th:if="${record.indicator != null and #strings.containsIgnoreCase(record.indicator, 'flood')}" class="badge badge-flood ml-2">Flood</span>
+                        <span th:if="${record.indicator != null and #strings.containsIgnoreCase(record.indicator, 'drought')}" class="badge badge-drought ml-2">Drought</span>
+                        <span th:if="${record.indicator != null and #strings.containsIgnoreCase(record.indicator, 'storm')}" class="badge badge-storm ml-2">Storm</span>
+                        <span th:if="${record.indicator != null and #strings.containsIgnoreCase(record.indicator, 'landslide')}" class="badge badge-landslide ml-2">Landslide</span>
+                        <span th:if="${record.indicator != null and #strings.containsIgnoreCase(record.indicator, 'wildfire')}" class="badge badge-wildfire ml-2">Wildfire</span>
+                        <span th:if="${record.indicator != null and #strings.containsIgnoreCase(record.indicator, 'extreme')}" class="badge badge-extreme ml-2">Extreme Temp</span>
+                        <span th:if="${record.indicator != null and #strings.containsIgnoreCase(record.indicator, 'total')}" class="badge badge-total ml-2">Total</span>
+                    </td>
+                    <td class="py-3 px-3 font-bold" th:text="${record.value != null ? record.value : '-'}"></td>
+                    <td class="py-3 px-3" th:text="${record.unit}"></td>
+                    <td class="py-3 px-3 text-xs" th:text="${record.source}"></td>
+                </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Trend Chart -->
+        <div class="my-14">
+            <h2 class="text-2xl font-bold mb-4 text-blue-800 text-center">Disasters Per Year Trend</h2>
+            <div class="flex justify-center">
+                <canvas id="trendChart" height="100" class="rounded-xl shadow-lg bg-white p-4"></canvas>
+            </div>
+        </div>
+
+        <!-- Bar Chart: Disasters by Type -->
+        <div class="my-14">
+            <h2 class="text-2xl font-bold mb-4 text-blue-800 text-center">Disasters by Type</h2>
+            <div class="flex justify-center">
+                <canvas id="typeBarChart" height="100" class="rounded-xl shadow-lg bg-white p-4"></canvas>
+            </div>
+        </div>
+
+        <!-- Real Interactive Map -->
+        <div class="my-14">
+            <h2 class="text-2xl font-bold mb-4 text-blue-800 text-center">Disaster Map</h2>
+            <div id="map" style="height: 400px;" class="rounded-2xl shadow-xl border border-blue-200"></div>
+        </div>
+
+        <div class="mt-10 text-center">
+            <a href="/" class="inline-block bg-blue-700 text-white px-8 py-3 rounded-xl shadow-lg hover:bg-blue-800 transition font-semibold text-lg">Back to Home</a>
+        </div>
+    </div>
+
+    <!-- Scripts -->
+    <script th:inline="javascript">
+        // Top Years Card
+        fetch('/climate/api/top-disaster-years/' + [[${country}]])
+          .then(res => res.json())
+          .then(data => {
+            if(data.length > 0) {
+              let html = '<h2 class="text-lg font-bold text-green-700 mb-2">Top Years for Disasters</h2><ul class="text-base">';
+              data.forEach(entry => {
+                html += `<li class="mb-1"><span class="font-semibold text-green-900">Year ${entry.year}:</span> <span class="font-bold text-green-800">${entry.count}</span> disasters</li>`;
+              });
+              html += '</ul>';
+              document.getElementById('topYearsCard').innerHTML = html;
+            }
+          });
+
+        // Trend Chart
+        fetch('/climate/api/disasters-per-year/' + [[${country}]])
+          .then(res => res.json())
+          .then(data => {
+            const years = Object.keys(data);
+            const counts = Object.values(data);
+            new Chart(document.getElementById('trendChart'), {
+              type: 'line',
+              data: {
+                labels: years,
+                datasets: [{
+                  label: 'Number of Disasters',
+                  data: counts,
+                  borderColor: 'rgb(37, 99, 235)',
+                  backgroundColor: 'rgba(37, 99, 235, 0.12)',
+                  fill: true,
+                  tension: 0.35,
+                  pointRadius: 4,
+                  pointHoverRadius: 7
+                }]
+              },
+              options: {
+                responsive: true,
+                plugins: {
+                  legend: { display: true }
+                },
+                scales: {
+                  x: { grid: { color: '#e0e7ef' } },
+                  y: { grid: { color: '#e0e7ef' } }
+                }
+              }
+            });
+          });
+
+        // Bar Chart: Disasters by Type
+        fetch('/climate/api/disasters-by-type/' + [[${country}]])
+          .then(res => res.json())
+          .then(data => {
+            const labels = Object.keys(data);
+            const values = Object.values(data);
+            new Chart(document.getElementById('typeBarChart'), {
+              type: 'bar',
+              data: {
+                labels: labels,
+                datasets: [{
+                  label: 'Number of Disasters',
+                  data: values,
+                  backgroundColor: [
+                    '#3b82f6', // Flood - blue
+                    '#fde047', // Drought - yellow
+                    '#a78bfa', // Storm - purple
+                    '#4ade80', // Landslide - green
+                    '#f87171', // Wildfire - red
+                    '#f472b6', // Extreme Temp - pink
+                    '#9ca3af'  // Other - gray
+                  ],
+                  borderRadius: 8
+                }]
+              },
+              options: {
+                responsive: true,
+                plugins: {
+                  legend: { display: false },
+                  tooltip: { enabled: true }
+                },
+                scales: {
+                  x: { grid: { color: '#e0e7ef' } },
+                  y: { grid: { color: '#e0e7ef' }, beginAtZero: true }
+                }
+              }
+            });
+          });
+
+        // Leaflet Map
+        var lat = /*[[${lat}]]*/ 0;
+        var lon = /*[[${lon}]]*/ 0;
+        var country = /*[[${country}]]*/ 'Country';
+        var map = L.map('map').setView([lat, lon], 5);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '&copy; OpenStreetMap contributors'
+        }).addTo(map);
+        L.marker([lat, lon]).addTo(map)
+            .bindPopup('Capital of ' + country)
+            .openPopup();
+
+        // ScrollReveal Animations
+        ScrollReveal().reveal('h1', { delay: 100, origin: 'top', distance: '40px', duration: 600 });
+        ScrollReveal().reveal('.flex.flex-wrap', { delay: 200, origin: 'bottom', distance: '30px', duration: 600 });
+        ScrollReveal().reveal('form', { delay: 300, origin: 'left', distance: '30px', duration: 600 });
+        ScrollReveal().reveal('.overflow-x-auto', { delay: 400, origin: 'right', distance: '40px', duration: 700 });
+        ScrollReveal().reveal('.my-14', { delay: 500, origin: 'bottom', distance: '60px', duration: 900 });
+    </script>
+</body>
+</html>
